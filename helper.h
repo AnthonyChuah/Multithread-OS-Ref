@@ -19,6 +19,7 @@
 # include <pthread.h>
 # include <ctype.h>
 # include <iostream>
+# include <semaphore.h>
 using namespace std;
 
 # define SEM_KEY 0x50 // Change this number as needed
