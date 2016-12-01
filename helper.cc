@@ -40,7 +40,7 @@ int sem_attach (key_t key)
     return -1;
   return id;
 }
- 
+
 int sem_create (key_t key, int num)
 {
   // Creates a new semaphore using semget(key,nsems,semflg) system call. Returns the semaphore set identifier.
@@ -73,6 +73,17 @@ void sem_wait (int id, short unsigned int num)
     {num, -1, SEM_UNDO}
   };
   semop (id, op, 1);
+}
+
+void sem_timewait (int id, short unsigned int num)
+{
+  struct sembuf op[] = {
+    {num, -1, SEM_UNDO}
+  };
+  struct timespec time[] = {
+    {20, 0}
+  }; // 20 secs, 0 nanosecs.
+  semtimedop (id, op, 1, time);
 }
 
 void sem_signal (int id, short unsigned int num)

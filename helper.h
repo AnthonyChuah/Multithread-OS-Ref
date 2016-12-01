@@ -20,9 +20,10 @@
 # include <ctype.h>
 # include <iostream>
 # include <semaphore.h>
+# include <queue>
 using namespace std;
 
-# define SEM_KEY 0x50 // Change this number as needed
+# define SEM_KEY 0xB69A // Change this number as needed
 
 union semun {
     int val;               /* used for SETVAL only */
