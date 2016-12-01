@@ -11,7 +11,7 @@ void *producer (void *id);
 void *consumer (void *id);
 
 void insertbuffer(int val, int bufsize) {
-  if (buffer_index < queue_size) {
+  if (buffer_index < bufsize) {
     buffer[buffer_index] = val;
   } else {
     cout << "Buffer overflow\n";
