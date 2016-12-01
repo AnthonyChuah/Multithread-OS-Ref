@@ -12,6 +12,18 @@ int main (int argc, char **argv)
 {
   pthread_t producerid;
   int parameter = 5;
+  cout << "Arguments: ";
+  for (int i = 1; i < argc; i++) {
+    cout << *argv[i] << " ";
+  }
+  cout << "\n";
+  
+  // pthread_create arguments:
+  // thread: unique id for new thread
+  // attr: you may set thread attributes. Here NULL means default
+  // start_routine is the function that will be called
+  // arg is the single argument that can be passed to start_routine
+  // Here, we are passing the address of parameter to the producer(*id) function.
 
   pthread_create (&producerid, NULL, producer, (void *) &parameter);
 
@@ -34,7 +46,7 @@ void *producer(void *parameter)
 
 void *consumer (void *id) 
 {
-    // TODO 
+  // TODO 
 
   pthread_exit (0);
 
