@@ -44,6 +44,7 @@ int sem_attach (key_t key)
 int sem_create (key_t key, int num)
 {
   // Creates a new semaphore using semget(key,nsems,semflg) system call. Returns the semaphore set identifier.
+  // OK: this set of helper functions create semaphore sets with only ONE semaphore.
   int id;
   if ((id = semget (key, num,  0666 | IPC_CREAT | IPC_EXCL)) < 0)
     return -1;
@@ -52,6 +53,7 @@ int sem_create (key_t key, int num)
 
 int sem_init (int id, int num, int value)
 {
+  // id is the sem_id, num is always 0.
   // semctl(id,num,setval,semun). id is the semaphore set id you wish to do semctl upon.
   // semnum is the Nth semaphore in the semaphore set corresponding to id.
   // SETVAL is the name of the Linux command, sets a value of a semaphore.
@@ -80,10 +82,11 @@ bool sem_timewait (int id, short unsigned int num)
   struct sembuf op[] = {
     {num, -1, SEM_UNDO}
   };
-  struct timespec time[] = {
-    {20, 0}
-  }; // 20 secs, 0 nanosecs.
-  if (semtimedop (id, op, 1, time) != 0) {
+  struct timespec tspec;
+  tspec.tv_sec = 20;
+  tspec.tv_nsec = 0;
+  // 20 secs, 0 nanosecs.
+  if (semtimedop (id, op, 1, &tspec) != 0) {
     return true;
   } else {
     return false;
