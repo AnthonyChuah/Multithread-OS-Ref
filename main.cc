@@ -25,26 +25,40 @@ public:
   }
   void push(int _jobtime) {
     // Insertion is DECREMENT (wait) the first, INCREMENT (signal) the second.
+    sem_wait(sem_id, 0); // OCCUPY / DECREMENT first semaphore, which is for the FULL BUFFER.
+    // Mnemonic: pushing makes it MORE FULL. DECREMENTING is OCCUPYING RESOURCE. INCREMENT is RELEASE.
+    // Structure:
+    // 1. Decrement the First (Fullness) semaphore using wait.
+    // 2. Decrement (lock) the mutex.
+    // 3. Insert the jobtime 
     pthread_mutex_lock(&mutex);
-    while (buffer.size() == maxsize) {
-      sem_wait(sem_id, 0); // OCCUPY / DECREMENT first semaphore, which is for the FULL BUFFER.
-      // Mnemonic: pushing makes it MORE FULL. DECREMENTING is OCCUPYING RESOURCE. INCREMENT is RELEASE.
-    }
-    buffer.push(_jobtime);
-    sem_signal(sem_id, 1);
+    buffer.push(_jobtime); // Critical section.
     pthread_mutex_unlock(&mutex);
+    sem_signal(sem_id, 1);
   }
   int extract() {
     // Extraction is INCREMENT (signal) the first, DECREMENT (wait) the second.
-    pthread_mutex_lock(&mutex);
     // while (buffer.size() == 0) {
     //   sem_timewait(sem_id, 1);
     // }
-    sem_timewait(sem_id, 1); // Waits on second semaphore, but will time out after 20 secs.
+    // Structure:
+    // 1. Decrement the Second (Emptiness) semaphore using wait, but with a timer.
+    // 2. Decrement (lock) the mutex.
+    // 3. Pop from queue and read the jobtime. Sleep for that jobtime.
+    // 4. Increment (unlock) the mutex.
+    // 5. Increment the First (Fullness) semaphore using signal.
+    if (sem_timewait(sem_id, 1)) {
+      return -1;
+    }
+    // Waits on second semaphore, but will time out after 20 secs.
+    // If it times out, then it will return -1 and not do anything else.
+    // If no time out, it will proceed to lock the mutex and consume the job.
+    pthread_mutex_lock(&mutex);
     int jobtime = buffer.front();
     buffer.pop();
-    sem_signal(sem_id, 0); // The semaphore for FULL buffer should free up / increment counter.
+    sleep(jobtime);
     pthread_mutex_unlock(&mutex);
+    sem_signal(sem_id, 0); // The semaphore for FULL buffer should free up / increment counter.
     return jobtime;
   }
 };
@@ -126,14 +140,19 @@ void *producer(void* _args)
   // Producer will Buffer::insert() a job into the buffer with a random jobtime parameter.
   // Make it sleep a tiny bit between each job insertion, e.g. 1 second, so we can see Consumers snatch up jobs
   // before new jobs are inserted into queue.
-  Arguments* args = (Arguments*) _args;
-  int njobs = args->njobs;
-  int threadid = args->threadid;
+  Arguments* args = (Arguments*) _args; // Need to cast the void pointer to Arguments type to use it.
+  int njobs = args->njobs; // Number of jobs per producer.
+  int threadid = args->threadid; // The thread number.
   // Loop however many times njobs says you have to, and make that number of jobs, each with its random jobtime.
   // Do a random jobtime calculation (spec says between 1 to 10 seconds).
-  args.buffer_ptr->insert(jobtime);
-  // The above is inside a loop. Write that code soon!
+  for (int i = 0; i < njobs; i++) {
+    jobtime = rand() % 10;
+    args.buffer_ptr->push(jobtime);
+    cout << "Producer in thread " << threadid << " has pushed a new job " << i << " of duration " << jobtime
+	 << " to the buffer.\n";
+  }
   pthread_exit(0);
+  return NULL;
 }
 
 void *consumer (void *args)
@@ -144,8 +163,16 @@ void *consumer (void *args)
   // Then it should break the loop and proceed to close the thread, and print out "No more jobs left".
   Arguments* args = (Arguments*) _args;
   int threadid = args->threadid;
+  int duration = 0;
+  while (duration != -1) {
+    duration = args.buffer_ptr->extract();
+    cout << "Consumer in thread " << threadid << " has completed a job of duration " << duration << ".\n";
+  } // Repeat until there is a timeout.
   // Insert a while loop here that breaks only after 20 seconds pass. Use semtimedop() for this. See:
   // https://linux.die.net/man/2/semop
   // This means that the extraction member function of Buffer should use sem_timewait which I added.
+  // Ended up making this inside the member function of Buffer.
+  cout << "Consumer in thread " << threadid << " has timed out and closed thread because no more jobs.\n";
   pthread_exit (0);
+  return NULL;
 }
