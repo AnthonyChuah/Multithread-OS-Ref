@@ -6,8 +6,7 @@
 #include "helper.h"
 
 // Make a global mutex to manage writing to the stdout stream.
-pthread_mutex_t stdout_mutex;
-pthread_mutex_init(&stdout_mutex, NULL);
+pthread_mutex_t stdout_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Basically this is a thread-safe Buffer class. It contains queue of integers which represent job time.
 class Buffer {
@@ -21,10 +20,14 @@ public:
   Buffer(int _keyfull, int _keyempty, int _buffsize) {
     maxsize = _buffsize;
     pthread_mutex_init(&mutex, NULL);
-    sem_id_full = sem_create(_keyfull, 2);
-    sem_id_empty = sem_create(_keyempty, 2);
+    sem_id_full = sem_create(_keyfull, 1);
+    sem_id_empty = sem_create(_keyempty, 1);
     cout << "Buffer Constructor found a full semaphore ID " << sem_id_full << ".\n";
     cout << "Buffer Constructor found an empty semaphore ID " << sem_id_empty << ".\n";
+    if (sem_id_full == -1 || sem_id_empty == -1) {
+      cout << "At least one semaphore could not be created. Abort now.\n";
+      exit(1);
+    }
     sem_init(sem_id_full, 0, _buffsize); // First semaphore in the set is always the semaphore for a full buffer.
     sem_init(sem_id_empty, 0, 0); // Second semaphore in the set is for empty buffer: starts at 0.
   }
@@ -39,12 +42,12 @@ public:
     // Structure:
     // 1. Decrement the First (Fullness) semaphore using wait.
     // 2. Decrement (lock) the mutex.
-    // 3. Insert the jobtime 
+    // 3. Insert the jobtime into the buffer.
     pthread_mutex_lock(&mutex);
     buffer.push(_jobtime); // Critical section.
-    sleep(1);
     pthread_mutex_unlock(&mutex);
     sem_signal(sem_id_empty, 0);
+    sleep(1);
   }
   int extract() {
     // Extraction is INCREMENT (signal) the full (do this later, after this->), DECREMENT (wait) the empty.
@@ -60,16 +63,16 @@ public:
     // if (sem_timewait(sem_id, 1)) {
     //   return -1;
     // }
-    sem_wait(sem_id_empty, 0);
+    sem_timewait(sem_id_empty, 0);
     // Waits on second semaphore, but will time out after 20 secs.
     // If it times out, then it will return -1 and not do anything else.
     // If no time out, it will proceed to lock the mutex and consume the job.
     pthread_mutex_lock(&mutex);
     int jobtime = buffer.front();
     buffer.pop();
-    sleep(jobtime);
     pthread_mutex_unlock(&mutex);
     sem_signal(sem_id_full, 0); // The semaphore for FULL buffer should free up / increment counter.
+    sleep(jobtime);
     return jobtime;
   }
 };
@@ -107,6 +110,14 @@ int main (int argc, char **argv)
   cout << "Number of producers: " << num_prods << "\n";
   cout << "Number of consumers: " << num_cons << "\n";
   cout << "Number of threads: " << nthreads << "\n";
+  if (num_cons > queue_size) {
+    cout << "This program cannot work properly on a queue smaller than the number of consumers!\n";
+    return 1;
+  }
+  if (num_cons > (2 * num_prods)) {
+    cout << "This program cannot support a number of consumers more than twice as large as number of producers.\n";
+    return 1;
+  }
   Buffer JobQueue(SEM_KEY_FULL, SEM_KEY_EMPTY, queue_size);
 
   pthread_t thread[nthreads]; // no of threads in this program, each thread is an element of the array.
@@ -125,7 +136,7 @@ int main (int argc, char **argv)
   }
   // Next, launch all consumers.
   for (int j = num_prods; j < (num_prods + num_cons); j++) {
-    argarray[j].njobs = num_jobs_per_prod;
+    argarray[j].njobs = (num_jobs_per_prod * num_prods) / num_cons + 1;
     argarray[j].threadid = j;
     argarray[j].buffer_ptr = &JobQueue;
     pthread_create(&thread[j], NULL, consumer, &argarray[j]);
@@ -185,6 +196,7 @@ void* consumer (void* _args)
   // Consumer should do this indefinitely until it fails to read any job for 20 seconds.
   // Then it should break the loop and proceed to close the thread, and print out "No more jobs left".
   int threadid = ((Arguments*) _args)->threadid;
+  int njobs = ((Arguments*) _args)->njobs;
   int duration = 0;
   // while (duration != -1) {
   //   duration = ((Arguments*) _args)->buffer_ptr->extract();
@@ -192,8 +204,12 @@ void* consumer (void* _args)
   //     cout << "Consumer in thread " << threadid << " has completed a job of duration " << duration << ".\n";
   //   }
   // } // Repeat until there is a timeout.
-  duration = ((Arguments*) _args)->buffer_ptr->extract();
-  cout << "Consumer extracted a job of duration " << duration << ".\n";
+  for (int i = 0; i < njobs ; i++) {
+    duration = ((Arguments*) _args)->buffer_ptr->extract();
+    pthread_mutex_lock(&stdout_mutex);
+    cout << "Consumer extracted a job of duration " << duration << ".\n";
+    pthread_mutex_unlock(&stdout_mutex);
+  }
   // Insert a while loop here that breaks only after 20 seconds pass. Use semtimedop() for this. See:
   // https://linux.die.net/man/2/semop
   // This means that the extraction member function of Buffer should use sem_timewait which I added.

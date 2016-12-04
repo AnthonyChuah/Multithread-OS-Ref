@@ -77,7 +77,7 @@ void sem_wait (int id, short unsigned int num)
   semop (id, op, 1);
 }
 
-bool sem_timewait (int id, short unsigned int num)
+void sem_timewait (int id, short unsigned int num)
 {
   struct sembuf op[] = {
     {num, -1, SEM_UNDO}
@@ -86,11 +86,7 @@ bool sem_timewait (int id, short unsigned int num)
   tspec.tv_sec = 20;
   tspec.tv_nsec = 0;
   // 20 secs, 0 nanosecs.
-  if (semtimedop (id, op, 1, &tspec) != 0) {
-    return true;
-  } else {
-    return false;
-  }
+  semtimedop (id, op, 1, &tspec);
 }
 
 void sem_signal (int id, short unsigned int num)
