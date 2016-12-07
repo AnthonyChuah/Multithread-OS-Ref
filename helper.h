@@ -23,8 +23,8 @@
 # include <queue>
 using namespace std;
 
-# define SEM_KEY_FULL 0xB60F // Change this number as needed
-# define SEM_KEY_EMPTY 0x39F7
+# define SEM_KEY_FULL 0xB600 // Change this number as needed
+# define SEM_KEY_EMPTY 0x3900
 
 union semun {
     int val;               /* used for SETVAL only */
