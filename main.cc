@@ -101,6 +101,11 @@ void *consumer (void *id);
 int main (int argc, char **argv)
 {
   // Command line args are size_of_queue  num_jobs_each_prod  num_prods  num_cons.
+  if (argc != 5) {
+    cout << "Wrong number of inputs. You must have 4 input arguments fed into the command line.\n";
+    cerr << "Wrong number of inputs. You must have 4 input arguments fed into the command line.\n";
+    return 1;
+  }
   int queue_size, num_jobs_per_prod, num_prods, num_cons, nthreads;
   if (check_arg(argv[1]) >= 0) {
     queue_size = check_arg(argv[1]); // This also means BUFFER SIZE.
